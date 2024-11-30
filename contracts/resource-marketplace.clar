@@ -99,3 +99,60 @@
     (try! (adjust-resource-balance (to-int quantity)))
     (map-set resources-listed {user: tx-sender} {quantity: new-listing, price: price})
     (ok true)))
+
+;; Acquire resources from another user
+(define-public (acquire-resources (provider principal) (quantity uint))
+  (let (
+    (listing-data (default-to {quantity: u0, price: u0} (map-get? resources-listed {user: provider})))
+    (resource-cost (* quantity (get price listing-data)))
+    (platform-fee (compute-platform-fee resource-cost))
+    (total-cost (+ resource-cost platform-fee))
+    (provider-resource (default-to u0 (map-get? user-resource-balance provider)))
+    (requester-balance (default-to u0 (map-get? user-stx-balance tx-sender)))
+    (provider-balance (default-to u0 (map-get? user-stx-balance provider)))
+    (admin-balance (default-to u0 (map-get? user-stx-balance contract-admin))))
+    (asserts! (not (is-eq tx-sender provider)) err-same-user-transaction)
+    (asserts! (> quantity u0) err-quantity-invalid)
+    (asserts! (>= (get quantity listing-data) quantity) err-insufficient-balance)
+    (asserts! (>= provider-resource quantity) err-insufficient-balance)
+    (asserts! (>= requester-balance total-cost) err-insufficient-balance)
+
+    ;; Update provider's resource balance and listing quantity
+    (map-set user-resource-balance provider (- provider-resource quantity))
+    (map-set resources-listed {user: provider} 
+             {quantity: (- (get quantity listing-data) quantity), price: (get price listing-data)})
+
+    ;; Update requester's STX and resource balance
+    (map-set user-stx-balance tx-sender (- requester-balance total-cost))
+    (map-set user-resource-balance tx-sender (+ (default-to u0 (map-get? user-resource-balance tx-sender)) quantity))
+
+    ;; Update provider's and contract admin's STX balance
+    (map-set user-stx-balance provider (+ provider-balance resource-cost))
+    (map-set user-stx-balance contract-admin (+ admin-balance platform-fee))
+
+    (ok true)))
+
+;; Request resource reimbursement
+(define-public (request-reimbursement (quantity uint))
+  (let (
+    (user-resource (default-to u0 (map-get? user-resource-balance tx-sender)))
+    (reimbursement-amount (compute-reimbursement quantity))
+    (contract-stx-balance (default-to u0 (map-get? user-stx-balance contract-admin))))
+    (asserts! (> quantity u0) err-quantity-invalid)
+    (asserts! (>= user-resource quantity) err-insufficient-balance)
+    (asserts! (>= contract-stx-balance reimbursement-amount) err-refund-issue)
+
+    ;; Update user's resource balance
+    (map-set user-resource-balance tx-sender (- user-resource quantity))
+
+    ;; Update user's and contract admin's STX balance
+    (map-set user-stx-balance tx-sender (+ (default-to u0 (map-get? user-stx-balance tx-sender)) reimbursement-amount))
+    (map-set user-stx-balance contract-admin (- contract-stx-balance reimbursement-amount))
+
+    ;; Return reimbursed resource to contract admin's balance
+    (map-set user-resource-balance contract-admin (+ (default-to u0 (map-get? user-resource-balance contract-admin)) quantity))
+
+    ;; Update resource balance
+    (try! (adjust-resource-balance (to-int (- quantity))))
+
+    (ok true)))
