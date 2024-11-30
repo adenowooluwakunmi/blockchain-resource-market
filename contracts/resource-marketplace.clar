@@ -190,3 +190,16 @@
 ;; Fetch user's STX balance
 (define-read-only (fetch-user-stx-balance (user principal))
   (ok (default-to u0 (map-get? user-stx-balance user))))
+
+;; Fetch the maximum resource limit per user
+(define-read-only (fetch-max-resource-per-user)
+  (ok (var-get max-resource-per-user)))
+
+;; Fetch total resource limit
+(define-read-only (fetch-total-resource-limit)
+  (ok (var-get total-resource-limit)))
+
+;; Fetch current system-wide resource balance
+(define-read-only (fetch-current-resource-balance)
+  (ok (var-get current-resource-balance)))
+
