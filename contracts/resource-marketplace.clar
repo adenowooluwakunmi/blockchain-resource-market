@@ -100,6 +100,18 @@
     (map-set resources-listed {user: tx-sender} {quantity: new-listing, price: price})
     (ok true)))
 
+;; Remove resources from listing
+(define-public (remove-resources (quantity uint))
+  (let (
+    (current-listed (get quantity (default-to {quantity: u0, price: u0} (map-get? resources-listed {user: tx-sender}))))
+  )
+    (asserts! (>= current-listed quantity) err-insufficient-balance)
+    (try! (adjust-resource-balance (to-int (- quantity))))
+    (map-set resources-listed {user: tx-sender} 
+             {quantity: (- current-listed quantity), 
+              price: (get price (default-to {quantity: u0, price: u0} (map-get? resources-listed {user: tx-sender})))})
+    (ok true)))
+
 ;; Acquire resources from another user
 (define-public (acquire-resources (provider principal) (quantity uint))
   (let (
@@ -156,3 +168,38 @@
     (try! (adjust-resource-balance (to-int (- quantity))))
 
     (ok true)))
+
+;; Read-only functions
+
+;; Fetch current resource price
+(define-read-only (fetch-resource-price)
+  (ok (var-get resource-price)))
+
+;; Fetch current platform fee
+(define-read-only (fetch-platform-fee)
+  (ok (var-get platform-fee-rate)))
+
+;; Fetch current reimbursement rate
+(define-read-only (fetch-reimbursement-rate)
+  (ok (var-get reimbursement-rate)))
+
+;; Fetch user's resource balance
+(define-read-only (fetch-user-resource-balance (user principal))
+  (ok (default-to u0 (map-get? user-resource-balance user))))
+
+;; Fetch user's STX balance
+(define-read-only (fetch-user-stx-balance (user principal))
+  (ok (default-to u0 (map-get? user-stx-balance user))))
+
+;; Fetch the maximum resource limit per user
+(define-read-only (fetch-max-resource-per-user)
+  (ok (var-get max-resource-per-user)))
+
+;; Fetch total resource limit
+(define-read-only (fetch-total-resource-limit)
+  (ok (var-get total-resource-limit)))
+
+;; Fetch current system-wide resource balance
+(define-read-only (fetch-current-resource-balance)
+  (ok (var-get current-resource-balance)))
+
